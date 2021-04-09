@@ -1,91 +1,43 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 
-
 exports.signup = (req, res, next) => {
-  //Cryptage Email
-  const buffer = Buffer.from(req.body.email);
-  const cryptedEmail = buffer.toString('base64');
-  //Verification email disponible
-  db.query(`SELECT * FROM users WHERE email='${cryptedEmail}'`,
-          (err, results, rows) => {
-              //Si email deja utilisé
-              if (results.length > 0) {
-                  res.status(401).json({
-                      message: 'Email non disponible.'
-                  });
-                  //Si email disponible
-              } else {
-              //Cryptage du MDP
-              bcrypt.hash(req.body.password, 10)
-              .then(cryptedPassword => {
-                  //Ajout à la BDD
-                  db.query(`INSERT INTO users VALUES (NULL, '${req.body.nom}', '${req.body.prenom}', '${cryptedPassword}', '${cryptedEmail}', 0)`,
-                      (err, results, fields) => {
-                          if (err) {
-                              console.log(err);
-                              return res.status(400).json("erreur");
-                          }
-                          return res.status(201).json({
-                              message: 'Votre compte a bien été crée !'
-                          });
-                      }
-                  );
-              })
-              .catch(error => res.status(500).json({
-                  error
-              }));
-          }
-          });
+  bcrypt.hash(req.body.password, 10)
+    .then(hash => {
+      const user = new User({
+        nom: req.body.nom,
+        prenom: req.body.prenom,
+        email: req.body.email,
+        password: hash
+      });
+      user.save()
+        .then(() => res.status(201).json({ message: 'Utilisateur créé !' }))
+        .catch(error => res.status(400).json({ error }));
+      })
+    .catch(error => res.status(500).json({ error }));
 };
 
 exports.login = (req, res, next) => {
-  const buffer = Buffer.from(req.body.email);
-  const cryptedEmail = buffer.toString('base64');
-  //Recherche de l'utilisateur dans la BDD
-  db.query(`SELECT * FROM users WHERE email='${cryptedEmail}'`,
-      (err, results, rows) => {
-          //Si utilisateur trouvé : 
-          if (results.length > 0) {
-              //Verification du MDP
-              bcrypt.compare(req.body.password, results[0].password)
-                  .then(valid => {
-                      //Si MDP invalide erreur
-                      if (!valid) {
-                          res.status(401).json({
-                              message: 'Mot de passe incorrect.'
-                          });
-                          //Si MDP valide création d'un token
-                      } else {
-                          res.status(200).json({
-                              userId: results[0].id,
-                              nom: results[0].nom,
-                              prenom: results[0].prenom,
-                              admin: results[0].admin,
-                              token: jwt.sign({
-                                  userId: results[0].id
-                              }, process.env.TOKEN, {
-                                  expiresIn: '24h'
-                              })
-                          });
-                      }
-                  });
-          } else {
-              res.status(404).json({
-                  message: 'Utilisateur inconnu.'
-              });
+  User.findOne({ email: req.body.email })
+    .then(user => {
+      if (!user) {
+        return res.status(401).json({ error: 'Utilisateur non trouvé !' });
+      }
+      bcrypt.compare(req.body.password, user.password)
+        .then(valid => {
+          if (!valid) {
+            return res.status(401).json({ error: 'Mot de passe incorrect !' });
           }
-      }
-  );
-};
-
-exports.deleteUser = (req, res, next) => {
-  db.query(`DELETE FROM users WHERE users.id = ${req.params.id}`, (error, result, field) => {
-      if (error) {
-          return res.status(400).json({
-              error
+          res.status(200).json({
+            userId: user._id,
+            token: jwt.sign(
+              { userId: user._id },
+              'RANDOM_TOKEN_SECRET',
+              { expiresIn: '24h' }
+            )
           });
-      }
-      return res.status(200).json(result);
-  });
+        })
+        .catch(error => res.status(500).json({ error }));
+    })
+    .catch(error => res.status(500).json({ error }));
 };
