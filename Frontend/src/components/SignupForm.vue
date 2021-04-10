@@ -20,7 +20,7 @@
         <p>
           <input id="password" v-model="password" type="text" name="password" placeholder="Votre mot de passe"><br/>
         </p>
-        <button class="btn btn-danger" type="submit"><router-link to="/Profil">Je m'inscris !</router-link></button>
+        <button class="btn btn-danger" type="submit" @click.prevent="submitForm">Je m'inscris !</button>
       </form>  
     </div>
   </div>
@@ -41,10 +41,10 @@ export default {
   methods: {
     submitForm(){
       axios.post('http://localhost:3000/api/auth/signup', {
-          prenom: this.prenom,
-          nom: this.nom,
-          email: this.email,
-          password: this.password
+          'prenom': this.prenom,
+          'nom': this.nom,
+          'email': this.email,
+          'password': this.password
         })
         .then((response) => {
           console.log(response)
